@@ -1,0 +1,129 @@
+/*
+
+Covid 19 Data Exploration
+
+Skills used: Joins, CTE's, Temp Tables, Windows Functions, Aggregate Functions, Creating Views, Converting Data Types
+
+*/
+
+SELECT *
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` 
+WHERE continent is not null 
+ORDER BY 3,4
+
+-- Selecting data I'm going to be using
+
+SELECT location, date, total_cases, new_cases, total_deaths, population
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` 
+WHERE continent is not null 
+ORDER BY 1,2
+
+-- Total Cases v.s. Total Deaths
+
+SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as death_percentage
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` 
+WHERE location= "United States"
+and continent is not null 
+ORDER BY 1,2
+
+-- Total Cases v.s. Population 
+
+SELECT location, date, population, total_cases, (total_cases/population)*100 as population_infected_percent
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` 
+WHERE location= "United States"
+and continent is not null 
+ORDER BY 1,2
+
+-- Countires with highest contraction rate compared to population
+
+SELECT location, population, MAX(total_cases) as highest_contraction_count, Max((total_cases/population))*100 as population_contraction_percent
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` 
+WHERE continent is not null
+GROUP BY Location, Population
+ORDER BY population_contraction_percent desc
+
+-- Countries with highest death count per population
+
+SELECT Location, MAX(cast(total_deaths as int)) as total_death_count
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths`
+WHERE continent is not null 
+GROUP BY Location
+ORDER BY total_death_count desc
+
+-- Continents with highest death count per population
+
+SELECT continent, MAX(cast(total_deaths as int)) as total_death_count
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths`
+WHERE continent is not null 
+GROUP BY  continent
+ORDER BY total_death_count desc
+
+-- Global Numbers (total cases, total deaths, death percentage)
+
+SELECT sum(new_cases) as total_cases, sum(cast(new_deaths AS int)) as total_deaths,sum(cast(new_deaths as int))/sum(new_cases)*100 as death_percentage
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` 
+WHERE continent is not null 
+ORDER BY 1,2
+
+-- Total Population v.s. Vaccinations 
+
+SELECT death.continent, death.location, death.date, death.population, vacc.new_vaccinations
+, SUM(CAST(vacc.new_vaccinations as int)) OVER (Partition by death.Location Order by death.location, death.Date) as rolling_people_vaccinated
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` death
+JOIN `covid-portfolio-project-335016.CovidVaccinations.CovidVaccinations ` vacc
+    On death.location = vacc.location
+    and death.date = vacc.date
+WHERE death.continent is not null 
+ORDER BY 2,3
+
+-- Using CTE to perform calculation on Partition By in previous query
+
+WITH PopvsVac
+as 
+(
+    SELECT death.continent, death.location, death.date, death.population, vacc.new_vaccinations
+, SUM(CAST(vacc.new_vaccinations as bigint)) OVER (Partition by death.Location Order by death.location, death.Date) as rolling_people_vaccinated
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` death
+JOIN `covid-portfolio-project-335016.CovidVaccinations.CovidVaccinations ` vacc
+    On death.location = vacc.location
+    and death.date = vacc.date
+WHERE death.continent is not null 
+)
+SELECT *, (rolling_people_vaccinated/population)*100
+FROM PopvsVac
+
+-- Using Temp Table to perform Calculation on Partition By in previous query
+
+DROP TABLE IF EXISTS `percent_population_vaccinated`
+CREATE TABLE `percent_population_vaccinated`
+(
+continent nvarchar(255),
+location nvarchar(255),
+date datetime,
+population numeric,
+new_vaccinations numeric,
+rolling_people_vaccinated numeric
+)
+
+INSERT INTO `percent_population_vaccinated`
+SELECT death.continent, death.location, death.date, death.population, vacc.new_vaccinations
+, SUM(CAST(vacc.new_vaccinations as int)) OVER (PARTITION BY death.Location ORDER BY death.location, death.Date) as rolling_people_vaccinated
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` death
+JOIN `covid-portfolio-project-335016.CovidVaccinations.CovidVaccinations ` vacc
+    On death.location = vacc.location
+    On death.location = vacc.location
+    and death.date = vacc.date
+
+SELECT *, (rolling_people_vaccinated/population)*100
+FROM `percent_population_vaccinated`
+
+-- Creating View to store data for later visualizations
+
+CREATE VIEW percent_population_vaccinated as
+SELECT death.continent, death.location, death.date, death.population, vacc.new_vaccinations
+, SUM(CAST(vacc.new_vaccinations as int)) OVER (PARTITION BY death.Location ORDER BY death.location, death.Date) as rolling_people_vaccinated
+FROM `covid-portfolio-project-335016.CovidDeaths.CovidDeaths` death
+JOIN `covid-portfolio-project-335016.CovidVaccinations.CovidVaccinations ` vacc
+    On death.location = vacc.location
+    and death.date = vacc.date
+WHERE death.continent is not null
