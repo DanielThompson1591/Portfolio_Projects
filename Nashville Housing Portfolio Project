@@ -1,0 +1,159 @@
+/* Cleaning Data in SQL */
+
+SELECT *
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+
+
+/* Standardized Date Format */
+
+SELECT SaleDate
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+SELECT SaleDate, CAST(SaleDate AS DATE)
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+UPDATE Nashville_Data
+SET SaleDate = CAST(SaleDate AS DATE)
+
+
+
+/* Populate Property Address Data */
+
+SELECT *
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+--WHERE PropertyAddress is null 
+ORDER BY ParcelID
+
+SELECT a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress, b.PropertyAddress)
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data` a
+JOIN `housing-portfolio-project.Nashville_Housing.Nashville_Data` b
+on a.ParcelID = b.ParcelID
+and a.UniqueID_ <> b.UniqueID_
+WHERE a.PropertyAddress is null 
+
+UPDATE a
+SET PropertyAddress = ISNULL(a.PropertyAddress, b.PropertyAddress)
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data` a
+JOIN `housing-portfolio-project.Nashville_Housing.Nashville_Data` b
+on a.ParcelID = b.ParcelID
+and a.UniqueID_ <> b.UniqueID_
+WHERE a.PropertyAddress is null 
+
+
+
+/* Breaking out Address into Individual Columns (Address, City, State) */
+
+SELECT PropertyAddress
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+SELECT 
+SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1) as Address
+, SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) +1, LENGTH(PropertyAddress)) as Address
+
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+ALTER TABLE Nashville_Data
+Add PropertySplitAddress NVARCHAR(255);
+
+UPDATE Nashville_Data
+SET PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1)
+
+ALTER TABLE Nashville_Data
+Add PropertySplitCity NVARCHAR(255);
+
+UPDATE Nashville_Data
+SET PropertySplitCity = SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) +1, LENGTH(PropertyAddress))
+
+
+SELECT *
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+
+SELECT OwnerAddress
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+SELECT 
+PARSENAME(REPLACE(OwnerAddress, ',', '.') ,3)
+, PARSENAME(REPLACE(OwnerAddress, ',', '.') ,2)
+, PARSENAME(REPLACE(OwnerAddress, ',', '.') ,1)
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+ALTER TABLE Nashville_Data
+Add OwnerSplitAddress NVARCHAR(255);
+
+UPDATE Nashville_Data
+SET OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress, ',', '.') ,3)
+
+ALTER TABLE Nashville_Data
+Add OwnerSplitCity NVARCHAR(255);
+
+UPDATE Nashville_Data
+SET OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress, ',', '.') ,2)
+
+ALTER TABLE Nashville_Data
+Add OwnerSplitState NVARCHAR(255);
+
+UPDATE Nashville_Data
+SET OwnerSplitState = PARSENAME(REPLACE(OwnerAddress, ',', '.') ,1)
+
+SELECT *
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+
+
+/* Change Y and N to Yes and No in "Sold as Vacant" Field */
+
+SELECT DISTINCT SoldAsVacant, COUNT(SoldAsVacant)
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+GROUP BY SoldAsVacant
+ORDER BY 2
+
+SELECT SoldAsVacant
+, CASE When SoldAsVacant = 'Y' then 'Yes'
+    when SoldAsVacant = 'N' then 'No'
+    ELSE SoldAsVacant
+    END 
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+UPDATE Nashville_Data
+SET SoldAsVacant = CASE when SoldAsVacant = 'Y' then 'Yes'
+    when SoldAsVacant = 'N' then 'No'
+    ELSE SoldAsVacant
+    END 
+
+
+
+/* Removing Duplicates */
+
+WITH RowNumCTE AS(
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY ParcelID,
+                PropertyAddress,
+                SalePrice,
+                SaleDate,
+                LegalReference, 
+                ORDER BY
+                    UniqueID_
+        ) row_num 
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+)
+
+SELECT *
+FROM RowNumCTE
+WHERE row_num > 1
+ORDER BY PropertyAddress
+
+SELECT *
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+
+
+/* Deleting Unused Columns */
+
+SELECT *
+FROM `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+
+ALTER TABLE `housing-portfolio-project.Nashville_Housing.Nashville_Data`
+DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress, SaleDate
